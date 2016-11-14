@@ -1,4 +1,4 @@
-import {glGetDebugInfo} from 'luma.gl';
+import {Program, glGetDebugInfo} from 'luma.gl';
 import isEqual from 'lodash.isequal';
 
 // Load shader chunks
