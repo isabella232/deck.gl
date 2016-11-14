@@ -1,4 +1,5 @@
 import {glGetDebugInfo} from 'luma.gl';
+import isEqual from 'lodash.isequal';
 
 // Load shader chunks
 // import SHADER_CHUNKS from '../../dist/shaderlib/shader-chunks';
@@ -88,4 +89,17 @@ export function assembleShaders(gl, {
     vs: assembleShader(gl, {...opts, vs}),
     fs
   };
+}
+
+const shaderCache = [];
+export function assembleShaders(gl, options) {
+  const cacheEntry = shaderCache.find(
+    entry => isEqual(entry.options, options) && (entry.gl === gl)
+  );
+  if (cacheEntry) {
+    return {program: cacheEntry.program};
+  }
+  const program = new Program(gl, assembleShadersRaw(gl, options));
+  shaderCache.push({options, program, gl});
+  return {program};
 }
