@@ -79,7 +79,7 @@ function assembleShader(gl, {
   return source;
 }
 
-export function assembleShaders(gl, {
+function assembleShadersRaw(gl, {
   vs,
   fs,
   ...opts
@@ -92,6 +92,7 @@ export function assembleShaders(gl, {
 }
 
 const shaderCache = [];
+
 export function assembleShaders(gl, options) {
   const cacheEntry = shaderCache.find(
     entry => isEqual(entry.options, options) && (entry.gl === gl)
