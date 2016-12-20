@@ -17,11 +17,11 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
-import {Layer} from '../../../lib';
-import {assembleShaders} from '../../../shader-utils';
-import {GL, Model, Geometry} from 'luma.gl';
 
-const glslify = require('glslify');
+import {Layer, assembleShaders} from '../../..';
+import {GL, Model, Geometry} from 'luma.gl';
+import {readFileSync} from 'fs';
+import {join} from 'path';
 
 const DEFAULT_COLOR = [255, 0, 255, 255];
 
@@ -40,12 +40,16 @@ export default class ScatterplotLayer extends Layer {
    * @class
    * @param {object} props
    * @param {number} props.radius - point radius in meters
+   * @param {number} props.radiusMinPixels - min point radius in pixels
+   * @param {number} props.radiusMinPixels - max point radius in pixels
    */
   constructor({
     getPosition = defaultGetPosition,
     getRadius = defaultGetRadius,
     getColor = defaultGetColor,
     radius = 30,
+    radiusMinPixels = 0,
+    radiusMaxPixels = Number.MAX_SAFE_INTEGER,
     drawOutline = false,
     strokeWidth = 1,
     ...props
@@ -57,18 +61,22 @@ export default class ScatterplotLayer extends Layer {
       drawOutline,
       strokeWidth,
       radius,
+      radiusMinPixels,
+      radiusMaxPixels,
       ...props
     });
   }
 
   initializeState() {
+    /* eslint-disable */
     const {gl} = this.context;
     const model = this._getModel(gl);
     this.setState({model});
 
     const {attributeManager} = this.state;
     attributeManager.addInstanced({
-      instancePositions: {size: 4, update: this.calculateInstancePositions},
+      instancePositions: {size: 3, update: this.calculateInstancePositions},
+      instanceRadius: {size: 1, update: this.calculateInstanceRadius},
       instanceColors: {
         type: GL.UNSIGNED_BYTE,
         size: 4,
@@ -77,7 +85,9 @@ export default class ScatterplotLayer extends Layer {
     });
   }
 
-  updateState({props, oldProps}) {
+  updateState(evt) {
+    super.updateState(evt);
+    const {props, oldProps} = evt;
     if (props.drawOutline !== oldProps.drawOutline) {
       this.state.model.geometry.drawMode =
         props.drawOutline ? GL.LINE_LOOP : GL.TRIANGLE_FAN;
@@ -87,55 +97,74 @@ export default class ScatterplotLayer extends Layer {
   draw({uniforms}) {
     const {gl} = this.context;
     const lineWidth = this.screenToDevicePixels(this.props.strokeWidth);
-    const oldLineWidth = gl.getParameter(GL.LINE_WIDTH);
     gl.lineWidth(lineWidth);
     this.state.model.render({
       ...uniforms,
-      radius: this.props.radius
+      radius: this.props.radius,
+      radiusMinPixels: this.props.radiusMinPixels,
+      radiusMaxPixels: this.props.radiusMaxPixels
     });
-    gl.lineWidth(oldLineWidth);
+    // Setting line width back to 1 is here to workaround a Google Chrome bug
+    // gl.clear() and gl.isEnabled() will return GL_INVALID_VALUE even with
+    // correct parameter
+    // This is not happening on Safari and Firefox
+    gl.lineWidth(1.0);
+  }
+
+  getShaders(id) {
+    return {
+      vs: readFileSync(join(__dirname, './scatterplot-layer-vertex.glsl'), 'utf8'),
+      fs: readFileSync(join(__dirname, './scatterplot-layer-fragment.glsl'), 'utf8')
+    };
   }
 
   _getModel(gl) {
     const NUM_SEGMENTS = 16;
-    const PI2 = Math.PI * 2;
-
-    let positions = [];
+    const positions = [];
     for (let i = 0; i < NUM_SEGMENTS; i++) {
-      positions = [
-        ...positions,
-        Math.cos(PI2 * i / NUM_SEGMENTS),
-        Math.sin(PI2 * i / NUM_SEGMENTS),
+      positions.push(
+        Math.cos(Math.PI * 2 * i / NUM_SEGMENTS),
+        Math.sin(Math.PI * 2 * i / NUM_SEGMENTS),
         0
-      ];
+      );
     }
+    /* eslint-disable */
 
-    return new Model({
+
+    const shaders = assembleShaders(gl, this.getShaders())
+    const model = new Model({
       gl,
       id: 'scatterplot',
-      ...assembleShaders(gl, {
-        vs: glslify('./scatterplot-layer-vertex.glsl'),
-        fs: glslify('./scatterplot-layer-fragment.glsl')
-      }),
+      ...shaders,
       geometry: new Geometry({
         drawMode: GL.TRIANGLE_FAN,
         positions: new Float32Array(positions)
       }),
       isInstanced: true
     });
+    return model;
   }
 
   calculateInstancePositions(attribute) {
-    const {data, getPosition, getRadius} = this.props;
+    const {data, getPosition} = this.props;
     const {value, size} = attribute;
     let i = 0;
     for (const point of data) {
       const position = getPosition(point);
-      const radius = getRadius(point) || 1;
       value[i + 0] = position[0] || 0;
       value[i + 1] = position[1] || 0;
       value[i + 2] = position[2] || 0;
-      value[i + 3] = radius || 1;
+      i += size;
+    }
+  }
+
+  calculateInstanceRadius(attribute) {
+    const {data, getRadius} = this.props;
+    const {value, size} = attribute;
+    let i = 0;
+    for (const point of data) {
+      const radius = getRadius(point);
+      value[i + 0] = isNaN(radius) ? 1 : radius;
       i += size;
     }
   }

@@ -32,6 +32,7 @@ import {Viewport} from '../viewport';
 import {log} from './utils';
 import assert from 'assert';
 import {pickLayers} from './pick-layers';
+import {FramebufferObject} from 'luma.gl';
 
 export default class LayerManager {
   constructor({gl}) {
@@ -45,7 +46,8 @@ export default class LayerManager {
       gl,
       uniforms: {},
       viewport: null,
-      viewportChanged: true
+      viewportChanged: true,
+      pickingFBO: null
     };
     this.redrawNeeded = true;
     Object.seal(this.context);
@@ -54,6 +56,7 @@ export default class LayerManager {
   setContext({
     width, height, latitude, longitude, zoom, pitch, bearing, altitude
   }) {
+    /* eslint-disable */
     const oldViewport = this.context.viewport;
     const viewportChanged = !oldViewport ||
       width !== oldViewport.width ||
@@ -84,11 +87,12 @@ export default class LayerManager {
   }
 
   updateLayers({newLayers}) {
+    /* eslint-disable */
     assert(this.context.viewport,
       'LayerManager.updateLayers: viewport not set');
 
     // Filter out any null layers
-    newLayers = newLayers.filter(newLayer => Boolean(newLayer));
+    newLayers = newLayers.filter(newLayer => newLayer !== null);
 
     for (const layer of newLayers) {
       layer.context = this.context;
@@ -99,6 +103,7 @@ export default class LayerManager {
       oldLayers: this.prevLayers,
       newLayers
     });
+
     this.layers = generatedLayers;
     // Throw first error found, if any
     if (error) {
@@ -124,12 +129,23 @@ export default class LayerManager {
 
   pickLayer({x, y, mode}) {
     const {gl, uniforms} = this.context;
+
+    // Set up a frame buffer if needed
+    if (this.context.pickingFBO === null ||
+    gl.canvas.width !== this.context.pickingFBO.width ||
+    gl.canvas.height !== this.context.pickingFBO.height) {
+      this.context.pickingFBO = new FramebufferObject(gl, {
+        width: gl.canvas.width,
+        height: gl.canvas.height
+      });
+    }
     return pickLayers(gl, {
       x,
       y,
       uniforms,
       layers: this.layers,
-      mode
+      mode,
+      pickingFBO: this.context.pickingFBO
     });
   }
 
@@ -189,7 +205,7 @@ export default class LayerManager {
   /* eslint-disable max-statements */
   _matchSublayers({newLayers, oldLayerMap, generatedLayers}) {
     // Filter out any null layers
-    newLayers = newLayers.filter(newLayer => Boolean(newLayer));
+    newLayers = newLayers.filter(newLayer => newLayer !== null);
 
     let error = null;
     for (const newLayer of newLayers) {
@@ -203,6 +219,7 @@ export default class LayerManager {
         if (oldLayer === null) {
           log.once(0, `Multipe new layers with same id ${layerName(newLayer)}`);
         }
+
 
         // Only transfer state at this stage. We must not generate exceptions
         // until all layers' state have been transferred

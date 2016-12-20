@@ -43,7 +43,7 @@ const ChoroplethLayerExample = props =>
     ...props,
     id: props.id || 'choroplethLayerSolid',
     data: props.choropleths,
-    opacity: 0.01,
+    opacity: 0.1,
     pickable: true,
     onHover: props.onChoroplethHovered,
     onClick: props.onChoroplethClicked
@@ -77,6 +77,8 @@ const ScatterplotLayerExample = props =>
     opacity: 0.5,
     strokeWidth: 2,
     pickable: true,
+    radiusMinPixels: 1,
+    radiusMaxPixels: 30,
     onHover: props.onScatterplotHovered,
     onClick: props.onScatterplotClicked
   });
@@ -134,31 +136,31 @@ const ChoroplethLayer64SolidExample = props =>
     ...props,
     id: props.id || 'choroplethLayer64Solid',
     data: props.choropleths,
-    opacity: 0.01,
+    opacity: 0.1,
     pickable: true,
     onHover: props.onChoroplethHovered,
     onClick: props.onChoroplethClicked
   });
 
 const ExtrudedChoroplethLayer64Example = props =>
-new ExtrudedChoroplethLayer64({
-  ...props,
+  new ExtrudedChoroplethLayer64({
+    ...props,
     id: props.id || 'extrudedChoroplethLayer64',
-  data: props.extrudedChoropleths,
-  pointLightLocation: [
-    props.mapViewState.longitude,
-    props.mapViewState.latitude,
-    1e4
-  ],
-  opacity: 1.0,
-  pickable: true
-});
+    data: props.extrudedChoropleths,
+    pointLightLocation: [
+      props.mapViewState.longitude,
+      props.mapViewState.latitude,
+      1e4
+    ],
+    opacity: 1.0,
+    pickable: true
+  });
 
 const LineLayer64Example = props =>
   new LineLayer64({
     ...props,
     id: props.id || 'lineLayer64',
-    data: props.arcs,
+    data: props.lines,
     strokeWidth: props.arcStrokeWidth || 1,
     pickable: true,
     onHover: props.onArcHovered,
@@ -171,6 +173,8 @@ const ScatterplotLayer64Example = props =>
     id: props.id || 'scatterplotLayer64',
     data: props.points,
     pickable: true,
+    radiusMinPixels: 1,
+    radiusMaxPixels: 30,
     onHover: props.onScatterplotHovered,
     onClick: props.onScatterplotClicked
   });

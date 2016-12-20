@@ -18,12 +18,11 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-import {Layer} from '../../../lib';
-import {assembleShaders} from '../../../shader-utils';
-import {GL, Model, Geometry} from 'luma.gl';
+import {Layer, assembleShaders} from '../../..';
 import {fp64ify} from '../../../lib/utils/fp64';
-
-const glslify = require('glslify');
+import {GL, Model, Geometry} from 'luma.gl';
+import {readFileSync} from 'fs';
+import {join} from 'path';
 
 const DEFAULT_COLOR = [0, 0, 255, 255];
 
@@ -65,6 +64,14 @@ export default class ArcLayer64 extends Layer {
     const {attributeManager} = this.state;
 
     attributeManager.addInstanced({
+      instanceSourcePositionsFP64: {
+        size: 4,
+        update: this.calculateInstanceSourcePositions
+      },
+      instanceTargetPositionsFP64: {
+        size: 4,
+        update: this.calculateInstanceTargetPositions
+      },
       instanceSourceColors: {
         size: 4,
         type: GL.UNSIGNED_BYTE,
@@ -74,9 +81,7 @@ export default class ArcLayer64 extends Layer {
         size: 4,
         type: GL.UNSIGNED_BYTE,
         update: this.calculateInstanceTargetColors
-      },
-      instanceSourcePositionsFP64: {size: 4, update: this.calculateInstanceSourcePositions},
-      instanceTargetPositionsFP64: {size: 4, update: this.calculateInstanceTargetPositions}
+      }
     });
 
     this.setState({model: this.createModel(gl)});
@@ -85,10 +90,22 @@ export default class ArcLayer64 extends Layer {
   draw({uniforms}) {
     const {gl} = this.context;
     const lineWidth = this.screenToDevicePixels(this.props.strokeWidth);
-    const oldLineWidth = gl.getParameter(GL.LINE_WIDTH);
     gl.lineWidth(lineWidth);
     this.state.model.render(uniforms);
-    gl.lineWidth(oldLineWidth);
+    // Setting line width back to 1 is here to workaround a Google Chrome bug
+    // gl.clear() and gl.isEnabled() will return GL_INVALID_VALUE even with
+    // correct parameter
+    // This is not happening on Safari and Firefox
+    gl.lineWidth(1.0);
+  }
+
+  getShaders() {
+    return {
+      vs: readFileSync(join(__dirname, './arc-layer-vertex.glsl'), 'utf8'),
+      fs: readFileSync(join(__dirname, './arc-layer-fragment.glsl'), 'utf8'),
+      fp64: true,
+      project64: true
+    };
   }
 
   createModel(gl) {
@@ -100,12 +117,7 @@ export default class ArcLayer64 extends Layer {
     return new Model({
       gl,
       id: this.props.id,
-      ...assembleShaders(gl, {
-        vs: glslify('./arc-layer-vertex.glsl'),
-        fs: glslify('./arc-layer-fragment.glsl'),
-        fp64: true,
-        project64: true
-      }),
+      ...assembleShaders(gl, this.getShaders()),
       geometry: new Geometry({
         drawMode: GL.LINE_STRIP,
         positions: new Float32Array(positions)

@@ -27,6 +27,7 @@ export function checkRendererVendor(debugInfo, gpuVendor) {
 }
 
 export function getPlatformShaderDefines(gl) {
+  /* eslint-disable */
   let platformDefines = '';
   const debugInfo = glGetDebugInfo(gl);
 

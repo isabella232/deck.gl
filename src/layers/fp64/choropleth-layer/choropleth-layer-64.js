@@ -18,16 +18,14 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-import {Layer} from '../../../lib';
-import {assembleShaders} from '../../../shader-utils';
-import {GL, Model, Geometry} from 'luma.gl';
+import {Layer, assembleShaders} from '../../..';
 import {fp64ify} from '../../../lib/utils/fp64';
-
-const glslify = require('glslify');
-
-import earcut from 'earcut';
+import {GL, Model, Geometry} from 'luma.gl';
 import flattenDeep from 'lodash.flattendeep';
 import normalize from 'geojson-normalize';
+import earcut from 'earcut';
+import {readFileSync} from 'fs';
+import {join} from 'path';
 
 const DEFAULT_COLOR = [0, 0, 255, 255];
 
@@ -94,10 +92,13 @@ export default class ChoroplethLayer64 extends Layer {
   draw({uniforms}) {
     const {gl} = this.context;
     const lineWidth = this.screenToDevicePixels(this.props.strokeWidth);
-    const oldLineWidth = gl.getParameter(GL.LINE_WIDTH);
     gl.lineWidth(lineWidth);
     this.state.model.render(uniforms);
-    gl.lineWidth(oldLineWidth);
+    // Setting line width back to 1 is here to workaround a Google Chrome bug
+    // gl.clear() and gl.isEnabled() will return GL_INVALID_VALUE even with
+    // correct parameter
+    // This is not happening on Safari and Firefox
+    gl.lineWidth(1.0);
   }
 
   pick(opts) {
@@ -109,16 +110,20 @@ export default class ChoroplethLayer64 extends Layer {
     info.object = feature;
   }
 
+  getShaders() {
+    return {
+      vs: readFileSync(join(__dirname, './choropleth-layer-vertex.glsl'), 'utf8'),
+      fs: readFileSync(join(__dirname, './choropleth-layer-fragment.glsl'), 'utf8'),
+      fp64: true,
+      project64: true
+    };
+  }
+
   getModel(gl) {
     return new Model({
       gl,
       id: this.props.id,
-      ...assembleShaders(gl, {
-        vs: glslify('./choropleth-layer-vertex.glsl'),
-        fs: glslify('./choropleth-layer-fragment.glsl'),
-        fp64: true,
-        project64: true
-      }),
+      ...assembleShaders(gl, this.getShaders()),
       geometry: new Geometry({
         drawMode: this.props.drawContour ? GL.LINES : GL.TRIANGLES
       }),

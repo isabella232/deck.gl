@@ -108,18 +108,22 @@ Callback arguments:
 Callback - called when the mouse moves over the layers.
 
 Arguments:
-- `info` - the `info` object of the topmost
-- `pickedInfos` - an array of info objects for all visible layers that
-matched the picked coordinate, in top to bottom order.
+- `info` - the [info](#remarks) object for the topmost matched layer
+at the coordinate
+- `pickedInfos` - an array of info objects for all pickable layers that
+are visible, in top to bottom order.
+- `event` - the original MouseEvent object
 
 ##### `onLayerClick` (Function, optional)
 
-Callback - called when the mouse moves over the layers.
+Callback - called when clicking on the layer.
 
 Arguments:
-- `info` - the `info` object of the topmost
-- `pickedInfos` - an array of info objects for all visible layers that
-matched the picked coordinate, in top to bottom order.
+- `info` - the [info](#remarks) object for the topmost matched layer
+at the coordinate
+- `pickedInfos` - an array of info objects for all pickable layers that
+are visible, in top to bottom order.
+- `event` - the original MouseEvent object
 
 ## Remarks
 
@@ -130,4 +134,3 @@ matched the picked coordinate, in top to bottom order.
   documentation of each layer.
 * Picking happens in top-to-bottom order (reverse of rendering), i.e.
   deck.gl traverses the layer list backwards during picking.
-

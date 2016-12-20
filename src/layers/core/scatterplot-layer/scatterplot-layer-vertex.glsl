@@ -17,27 +17,35 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
+
 #define SHADER_NAME scatterplot-layer-vertex-shader
 
 attribute vec3 positions;
 
-attribute vec4 instancePositions;
+attribute vec3 instancePositions;
+attribute float instanceRadius;
 attribute vec4 instanceColors;
 attribute vec3 instancePickingColors;
 
 uniform float opacity;
 uniform float radius;
+uniform float radiusMinPixels;
+uniform float radiusMaxPixels;
 uniform float renderPickingBuffer;
 
 varying vec4 vColor;
 
 void main(void) {
-  vec3 center = project_position(instancePositions.xyz);
-  vec3 vertex = positions * project_scale(radius * instancePositions.w);
+  vec3 center = project_position(instancePositions);
+  float radiusPixels = clamp(
+    project_scale(radius * instanceRadius),
+    radiusMinPixels, radiusMaxPixels
+  );
+  vec3 vertex = positions * radiusPixels;
   gl_Position = project_to_clipspace(vec4(center + vertex, 1.0));
+
   vec4 color = vec4(instanceColors.rgb, instanceColors.a * opacity) / 255.;
   vec4 pickingColor = vec4(instancePickingColors / 255., 1.);
-
   vColor = mix(
     color,
     pickingColor,

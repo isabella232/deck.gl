@@ -20,47 +20,44 @@
 import React, {PropTypes} from 'react';
 import autobind from 'autobind-decorator';
 import WebGLRenderer from './webgl-renderer';
-import {LayerManager} from '../lib';
+import {LayerManager, Layer} from '../lib';
+import {EffectManager, Effect} from '../experimental';
 import {GL, addEvents} from 'luma.gl';
+import {log} from '../lib/utils';
 
 function noop() {}
 
-const PROP_TYPES = {
-  id: PropTypes.string,
-  width: PropTypes.number.isRequired,
-  height: PropTypes.number.isRequired,
-  layers: PropTypes.array.isRequired,
-  gl: PropTypes.object,
-  debug: PropTypes.bool,
-  onWebGLInitialized: noop,
-  onLayerClick: noop,
-  onLayerHover: noop
-};
-
-const DEFAULT_PROPS = {
-  id: 'deckgl-overlay',
-  debug: false,
-  gl: null,
-  onWebGLInitialized: noop,
-  onLayerClick: noop,
-  onLayerHover: noop
-};
-
 export default class DeckGL extends React.Component {
 
-  static get propTypes() {
-    return PROP_TYPES;
-  }
+  static propTypes = {
+    id: PropTypes.string,
+    width: PropTypes.number.isRequired,
+    height: PropTypes.number.isRequired,
+    layers: PropTypes.arrayOf(PropTypes.instanceOf(Layer)).isRequired,
+    effects: PropTypes.arrayOf(PropTypes.instanceOf(Effect)),
+    gl: PropTypes.object,
+    debug: PropTypes.bool,
+    onWebGLInitialized: noop,
+    onLayerClick: noop,
+    onLayerHover: noop
+  };
 
-  static get defaultProps() {
-    return DEFAULT_PROPS;
-  }
+  static defaultProps = {
+    id: 'deckgl-overlay',
+    debug: false,
+    gl: null,
+    effects: [],
+    onWebGLInitialized: noop,
+    onLayerClick: noop,
+    onLayerHover: noop
+  };
 
   constructor(props) {
     super(props);
     this.state = {};
     this.needsRedraw = true;
     this.layerManager = null;
+    this.effectManager = null;
   }
 
   componentWillReceiveProps(nextProps) {
@@ -89,7 +86,21 @@ export default class DeckGL extends React.Component {
 
     // Note: avoid React setState due GL animation loop / setState timing issue
     this.layerManager = new LayerManager({gl});
+    this.effectManager = new EffectManager({gl, layerManager: this.layerManager});
+    for (const effect of this.props.effects) {
+      this.effectManager.addEffect(effect);
+    }
     this._updateLayers(this.props);
+
+    // Check if a mouse event has been specified and that at least one of the layers is pickable
+    const hasEvent = this.props.onLayerClick !== noop || this.props.onLayerHover !== noop;
+    const hasPickableLayer = this.layerManager.layers.map(l => l.props.pickable).includes(true);
+    if (hasEvent && !hasPickableLayer) {
+      log.once(
+        0,
+        'You have supplied a mouse event handler but none of your layers got the `pickable` flag.'
+      );
+    }
 
     this.events = addEvents(canvas, {
       cacheSize: false,
@@ -104,16 +115,18 @@ export default class DeckGL extends React.Component {
   @autobind _onClick(event) {
     const {x, y} = event;
     const selectedInfos = this.layerManager.pickLayer({x, y, mode: 'click'});
-    const firstInfo = selectedInfos.length > 0 ? selectedInfos[0] : null;
-    this.props.onLayerClick(firstInfo, selectedInfos);
+    const firstInfo = selectedInfos.find(info => info.index >= 0);
+    // Event.event holds the original MouseEvent object
+    this.props.onLayerClick(firstInfo, selectedInfos, event.event);
   }
 
   // Route events to layers
   @autobind _onMouseMove(event) {
     const {x, y} = event;
     const selectedInfos = this.layerManager.pickLayer({x, y, mode: 'hover'});
-    const firstInfo = selectedInfos.length > 0 ? selectedInfos[0] : null;
-    this.props.onLayerHover(firstInfo, selectedInfos);
+    const firstInfo = selectedInfos.find(info => info.index >= 0);
+    // Event.event holds the original MouseEvent object
+    this.props.onLayerHover(firstInfo, selectedInfos, event.event);
   }
 
   @autobind _onRenderFrame({gl}) {
@@ -122,7 +135,13 @@ export default class DeckGL extends React.Component {
     }
     // clear depth and color buffers
     gl.clear(GL.COLOR_BUFFER_BIT | GL.DEPTH_BUFFER_BIT);
+
+    this.effectManager.preDraw();
+
     this.layerManager.drawLayers();
+
+    this.effectManager.draw();
+
   }
 
   render() {

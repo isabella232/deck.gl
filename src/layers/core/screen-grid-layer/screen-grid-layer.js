@@ -18,11 +18,10 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-import {Layer} from '../../../lib';
-import {assembleShaders} from '../../../shader-utils';
+import {Layer, assembleShaders} from '../../..';
 import {GL, Model, Geometry} from 'luma.gl';
-
-const glslify = require('glslify');
+import {readFileSync} from 'fs';
+import {join} from 'path';
 
 export default class ScreenGridLayer extends Layer {
 
@@ -74,20 +73,22 @@ export default class ScreenGridLayer extends Layer {
     const {minColor, maxColor} = this.props;
     const {model, cellScale, maxCount} = this.state;
     const {gl} = this.context;
-    const depthWriteMask = gl.getParameter(GL.DEPTH_WRITEMASK);
     gl.depthMask(true);
     model.render({...uniforms, minColor, maxColor, cellScale, maxCount});
-    gl.depthMask(depthWriteMask);
+  }
+
+  getShaders() {
+    return {
+      vs: readFileSync(join(__dirname, './screen-grid-layer-vertex.glsl'), 'utf8'),
+      fs: readFileSync(join(__dirname, './screen-grid-layer-fragment.glsl'), 'utf8')
+    };
   }
 
   getModel(gl) {
     return new Model({
       gl,
       id: this.props.id,
-      ...assembleShaders(gl, {
-        vs: glslify('./screen-grid-layer-vertex.glsl'),
-        fs: glslify('./screen-grid-layer-fragment.glsl')
-      }),
+      ...assembleShaders(gl, this.getShaders()),
       geometry: new Geometry({
         drawMode: GL.TRIANGLE_FAN,
         vertices: new Float32Array([0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0])

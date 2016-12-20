@@ -17,11 +17,11 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
-import {Layer} from '../../../lib';
-import {assembleShaders} from '../../../shader-utils';
-import {GL, Model, Geometry} from 'luma.gl';
 
-const glslify = require('glslify');
+import {Layer, assembleShaders} from '../../..';
+import {GL, Model, Geometry} from 'luma.gl';
+import {readFileSync} from 'fs';
+import {join} from 'path';
 
 const DEFAULT_COLOR = [0, 255, 0, 255];
 
@@ -62,7 +62,8 @@ export default class LineLayer extends Layer {
 
     const {attributeManager} = this.state;
     attributeManager.addInstanced({
-      instancePositions: {size: 4, update: this.calculateInstancePositions},
+      instanceSourcePositions: {size: 3, update: this.calculateInstanceSourcePositions},
+      instanceTargetPositions: {size: 3, update: this.calculateInstanceTargetPositions},
       instanceColors: {
         type: GL.UNSIGNED_BYTE,
         size: 4,
@@ -74,10 +75,20 @@ export default class LineLayer extends Layer {
   draw({uniforms}) {
     const {gl} = this.context;
     const lineWidth = this.screenToDevicePixels(this.props.strokeWidth);
-    const oldLineWidth = gl.getParameter(GL.LINE_WIDTH);
     gl.lineWidth(lineWidth);
     this.state.model.render(uniforms);
-    gl.lineWidth(oldLineWidth);
+    // Setting line width back to 1 is here to workaround a Google Chrome bug
+    // gl.clear() and gl.isEnabled() will return GL_INVALID_VALUE even with
+    // correct parameter
+    // This is not happening on Safari and Firefox
+    gl.lineWidth(1.0);
+  }
+
+  getShaders() {
+    return {
+      vs: readFileSync(join(__dirname, './line-layer-vertex.glsl'), 'utf8'),
+      fs: readFileSync(join(__dirname, './line-layer-fragment.glsl'), 'utf8')
+    };
   }
 
   createModel(gl) {
@@ -86,10 +97,7 @@ export default class LineLayer extends Layer {
     return new Model({
       gl,
       id: this.props.id,
-      ...assembleShaders(gl, {
-        vs: glslify('./line-layer-vertex.glsl'),
-        fs: glslify('./line-layer-fragment.glsl')
-      }),
+      ...assembleShaders(gl, this.getShaders()),
       geometry: new Geometry({
         drawMode: GL.LINE_STRIP,
         positions: new Float32Array(positions)
@@ -98,17 +106,28 @@ export default class LineLayer extends Layer {
     });
   }
 
-  calculateInstancePositions(attribute) {
-    const {data, getSourcePosition, getTargetPosition} = this.props;
+  calculateInstanceSourcePositions(attribute) {
+    const {data, getSourcePosition} = this.props;
     const {value, size} = attribute;
     let i = 0;
     for (const object of data) {
       const sourcePosition = getSourcePosition(object);
-      const targetPosition = getTargetPosition(object);
       value[i + 0] = sourcePosition[0];
       value[i + 1] = sourcePosition[1];
-      value[i + 2] = targetPosition[0];
-      value[i + 3] = targetPosition[1];
+      value[i + 2] = sourcePosition[2] || 0;
+      i += size;
+    }
+  }
+
+  calculateInstanceTargetPositions(attribute) {
+    const {data, getTargetPosition} = this.props;
+    const {value, size} = attribute;
+    let i = 0;
+    for (const object of data) {
+      const targetPosition = getTargetPosition(object);
+      value[i + 0] = targetPosition[0];
+      value[i + 1] = targetPosition[1];
+      value[i + 2] = targetPosition[2] || 0;
       i += size;
     }
   }
